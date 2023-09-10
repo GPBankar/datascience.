@@ -1,0 +1,67 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+
+# Load historical stock price data (replace 'AAPL' with the desired stock symbol)
+# You'll need to have the historical stock price data in a CSV file with a 'Date' and 'Close' column.
+df = pd.read_csv('stock_data.csv')
+
+# Sort the dataframe by date
+df['Date'] = pd.to_datetime(df['Date'])
+df = df.sort_values('Date')
+
+# Extract the 'Close' prices as the target variable
+data = df[['Close']].values.astype(float)
+
+# Normalize the data to the range [0, 1]
+scaler = MinMaxScaler()
+data = scaler.fit_transform(data)
+
+# Split the data into training and testing sets
+train_size = int(len(data) * 0.8)
+train_data, test_data = data[:train_size], data[train_size:]
+
+# Create sequences of data for the LSTM model
+def create_sequences(data, seq_length):
+    sequences = []
+    for i in range(len(data) - seq_length):
+        seq = data[i:i + seq_length]
+        sequences.append(seq)
+    return np.array(sequences)
+
+seq_length = 10  # You can adjust this value
+X_train = create_sequences(train_data, seq_length)
+y_train = train_data[seq_length:]
+X_test = create_sequences(test_data, seq_length)
+y_test = test_data[seq_length:]
+
+# Build the LSTM model
+model = Sequential()
+model.add(LSTM(50, activation='relu', input_shape=(seq_length, 1)))
+model.add(Dense(1))
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Train the model
+model.fit(X_train, y_train, epochs=50, batch_size=32)
+
+# Make predictions
+predicted_stock_prices = model.predict(X_test)
+
+# Inverse transform the predictions to the original scale
+predicted_stock_prices = scaler.inverse_transform(predicted_stock_prices)
+y_test = scaler.inverse_transform(y_test)
+
+# Plot the actual vs. predicted stock prices
+plt.figure(figsize=(12, 6))
+plt.plot(df['Date'][train_size + seq_length:], y_test, label='Actual Price')
+plt.plot(df['Date'][train_size + seq_length:], predicted_stock_prices, label='Predicted Price')
+plt.xlabel('Date')
+plt.ylabel('Stock Price')
+plt.title('Stock Price Prediction')
+plt.legend()
+plt.show()
